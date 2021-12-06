@@ -8,3 +8,9 @@
 *.zip
 *.xlsx
 *.csv
+*.exe
+*.exp
+*.lib
+
+**/x64
+**/.vs
