@@ -218,7 +218,7 @@ int main(int argc, char **argv)
 
     printf("total GFLOPS: %lf\n", (cGflops + rGflops) / 2);
     printf("total GMEM_READS: %i\n", 2 * imageW * imageH);
-    printf("total TMEM_READS: %llu\n", (__int64) (2 * imageH * kernel_length * imageW));
+    printf("total TMEM_READS: %llu\n", (2 * imageH * kernel_length * imageW));
 
     printf("Reading back GPU results...\n");
     checkCudaErrors(cudaMemcpy(h_OutputGPU, d_Output, imageW * imageH * sizeof(float), cudaMemcpyDeviceToHost));
