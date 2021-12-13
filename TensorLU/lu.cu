@@ -6,17 +6,12 @@
    #include <cuda_runtime.h>
    #include <cuda_runtime_api.h>
    #include <cuda_fp16.h>
-   
-
-
-
 
    // Dynamically allocated shared memory
    extern __shared__ char SharedMemory[];
 
    // Load diagonal block as well as block bx into shared memory
    // workspace
-   // Note: we assume that m > n
    template<typename T,
             int TILE_SIZE,
             int TILES>
@@ -41,7 +36,6 @@
       sdata[tx + ty*ld_sdata] =
          ( (tx < n) && (ty < n)) ? // Note that m > n
          d[tx + ty*ldd] : (T) 0.0;
-         // a[tx + ty*lda] : (T) 0.0;
 
       // Load off-diag blocks A_ik
       for (std::int64_t r=0; r<TILES; ++r) {
@@ -75,11 +69,9 @@
       std::int64_t ld_sdata = (TILES+1)*TILE_SIZE;
 
       // Store diagonal block (block idx 0 only)
-      if (bx == 0) {
-         // printf("[dev_block_store] store diagonal\n");         
+      if (bx == 0) {        
          if ( (tx < n) && (ty < n) ) {
             a[tx + ty*lda] = sdata[tx + ty*ld_sdata];
-            // d[tx + ty*lda] = sdata[tx + ty*ld_sdata];
          }
       }
       
@@ -107,7 +99,6 @@
          int *const stat // Info parameter
          ) {
       
-      // Contains TILES tiles i.e. dimensions (TILES*TILE_SIZE,TILE_SIZE)
       T *swork = reinterpret_cast<T*>(SharedMemory); 
       int ld_swork = (TILES+1)*TILE_SIZE;
 
@@ -120,17 +111,6 @@
       for (int k = 0; k < n; ++k) {
 
          T d11 = swork[k+ld_swork*k];
-         // if ( fabs(d11) <  1e-20 ) {
-         //    if ((bx == 0) && (ty == 0) && (tx == 0)) {
-         //       printf("[dev_lu_nopiv_block] Zero pivot detected, d11 = %.3e\n", d11);
-         //       stat[0] = k;
-         //    }
-         //    return;
-         // }
-
-         // if ((bx == 0) && (ty == 0) && (tx == 0))
-            // printf("[dev_lu_nopiv_block] d11 = %f\n", d11);
-            // printf("[dev_lu_nopiv_block] bx = %d, tx = %d, ty = %d, d11 = %f\n", bx, tx, ty, d11);
          
          d11 = (T)1.0/d11;
          __syncthreads();
@@ -139,7 +119,6 @@
          if (ty == k) {
             // Diagonal tile
             if (tx > k && tx < n) {
-               // printf("[dev_lu_nopiv_block] tx = %d, ty = %d, aik = %f\n", tx, ty, swork[tx + k*ld_swork]);
                swork[tx + k*ld_swork] *= d11;
             }
             // Subdiagonal tiles
@@ -258,7 +237,6 @@
          int *const stat // Info parameter
          ) {
       
-      // Contains TILES tiles i.e. dimensions (TILES*TILE_SIZE,TILE_SIZE)
       T *swork = reinterpret_cast<T*>(SharedMemory); 
       int ld_swork = n;
 
@@ -271,18 +249,7 @@
       for (int k = 0; k < n; ++k) {
 
          T d11 = swork[k+ld_swork*k];
-         // if ( fabs(d11) <  1e-20 ) {
-         //    if ((bx == 0) && (ty == 0) && (tx == 0)) {
-         //       printf("[dev_lu_nopiv_block] Zero pivot detected, d11 = %.3e\n", d11);
-         //       stat[0] = k;
-         //    }
-         //    return;
-         // }
 
-         // if ((bx == 0) && (ty == 0) && (tx == 0)) {
-         //    printf("[dev_lu_nopiv_br_block] d11 = %f\n", d11);
-         // }
-         
          d11 = (T)1.0/d11;
          __syncthreads();
 
@@ -339,7 +306,6 @@
 
       unsigned int bx = blockIdx.x;
       unsigned int by = blockIdx.y;
-      // printf("[dev_lu_nopiv_panel] bx = %d, by = %d\n", bx, by);
 
       if (by==0) {
          dev_lu_nopiv_block<T, TILE_SIZE, TILES>(

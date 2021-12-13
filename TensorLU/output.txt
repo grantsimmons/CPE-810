@@ -4,9 +4,6 @@ Printing Matrix:
    0.066    4.000   -0.906    0.358 
    0.359    0.869    4.000    0.039 
    0.662   -0.931   -0.893    4.000 
-Here1
-HERE2
-Here1
 factor time (s) = 2.938330e-04
 GFlop/s = 0.000
 Printing Matrix: 

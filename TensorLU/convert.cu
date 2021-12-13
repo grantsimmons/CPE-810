@@ -68,8 +68,7 @@ void convert(
     
     dim3 threads( BLK_X, 1 );
     dim3 grid;
-    // std::cout << "super_grid.x = " << super_grid.x << std::endl;
-    // std::cout << "super_grid.y = " << super_grid.y << std::endl;
+
     std::int64_t mm, nn;
     for( std::int64_t i=0; i < super_grid.x; ++i ) {
         mm = (i == super_grid.x-1 ? m % super_NB : super_NB);
@@ -77,12 +76,6 @@ void convert(
         for( std::int64_t j=0; j < super_grid.y; ++j ) {  // full row
         nn = (j == super_grid.y-1 ? n % super_NB : super_NB);
         grid.y = (nn + BLK_Y - 1) / BLK_Y;
-
-        // std::cout << "mm = " << mm << std::endl;
-        // std::cout << "nn = " << nn << std::endl;
-        // std::cout << "lda = " << lda << std::endl;
-        // std::cout << "grid.x = " << grid.x << std::endl;
-        // std::cout << "grid.y = " << grid.y << std::endl;
 
         convert_kernel 
             <<< grid, threads, 0, stream >>>

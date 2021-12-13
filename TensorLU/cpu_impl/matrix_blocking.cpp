@@ -23,6 +23,7 @@ int main(int argc, char** argv) {
 		block_size = atoi(argv[2]);
 	}
 	else {
+		std::cout << "Please specify matrix size and block size: ./run <matrix size> <block size>" << std::endl;
 		exit(1);
 	}
 

@@ -23,7 +23,8 @@
 
 #define BLOCK_SIZE 8
 
-#define CUBLAS_ALGO CUBLAS_GEMM_ALGO4
+//#define CUBLAS_ALGO CUBLAS_GEMM_ALGO4
+//#define CUBLAS_ALGO CUBLAS_GEMM_DEFAULT_TENSOR_OP
 
 struct Opts {
     size_t m = 8;
@@ -153,12 +154,8 @@ void rl (
 }
 
 template<
-    typename T, // Working prec
-    //remifa::compute_type I=FP32, // Inner update comupte type
-    //remifa::compute_type O=FP32, // Outer update comupte type
+    typename T, // Working precision
     int ib=BLOCK_SIZE,
-    // int nb=OUTER_BLOCK_SIZE,
-    //bool use_cutlass=false,
     typename CpyType = half
     >
 void decompose_right_looking(
@@ -179,48 +176,43 @@ void decompose_right_looking(
     std::cout << nb << std::endl;
     std::int64_t const nc = (n-1) / nb + 1; //Max of num blocks in columns
 
-    // if (std::is_same<T, float>::value && (TC32==O) &&
-    //     d_a_cpy == nullptr) {
-    //     throw std::invalid_argument("A fp16 buffer should be provided");
-    // }
 
-          cudaStream_t stream; // CUDA Stream
-      // Retreive CUDA stream from cuBLAS handle
-      custat = cublasGetStream(cuhandle, &stream);
-      cublas_check_error(custat);
+    cudaStream_t stream; // CUDA Stream
+    // Retreive CUDA stream from cuBLAS handle
+    custat = cublasGetStream(cuhandle, &stream);
+    cublas_check_error(custat);
 
     cublasHandle_t queue = cuhandle;
 
     T alpha = -1.0, beta = 1.0;
     float alpha_fp32 = -1.0, beta_fp32 = 1.0;
 
-     // Workspace
-      T *d_d = nullptr;
-      std::int64_t lddd = ib;
-      cuerr = cudaMalloc((void**)&d_d, lddd*ib*sizeof(T));
-      checkCudaErrors(cuerr);
+    // Workspace
+    T *d_d = nullptr;
+    std::int64_t lddd = ib;
+    cuerr = cudaMalloc((void**)&d_d, lddd*ib*sizeof(T));
+    checkCudaErrors(cuerr);
 
     // Allocate buffer for storing a FP16 copy of the panel
-      half *d_l_tmp = nullptr;
-      std::int64_t lddl = ldda;
+    half *d_l_tmp = nullptr;
+    std::int64_t lddl = ldda;
     
-      half *d_u_tmp = nullptr;
-      std::int64_t lddu = ldda;
+    half *d_u_tmp = nullptr;
+    std::int64_t lddu = ldda;
 
-      for (int64_t kk = 0; kk < nc; ++kk) {
-                   std::int64_t ofs = kk*nb;
-         std::int64_t ofst = (kk+1)*nb;
-         std::int64_t in = std::min(n-ofs, nb);
-         std::int64_t inc = (in-1) / ib + 1; 
-         std::int64_t updm = m-ofs;
+    for (int64_t kk = 0; kk < nc; ++kk) {
+        std::int64_t ofs = kk*nb;
+        std::int64_t ofst = (kk+1)*nb;
+        std::int64_t in = std::min(n-ofs, nb);
+        std::int64_t inc = (in-1) / ib + 1; 
+        std::int64_t updm = m-ofs;
 
-        rl
-             <T, ib>
-             (cuhandle, 
-              updm, in, nb, 
-              &d_a[ofs + ofs*ldda], ldda,
-              d_d, d_info,
-              &d_a_cpy[ofs + ofs*ldda], ld_a_cpy);
+        rl<T, ib>
+            (cuhandle, 
+            updm, in, nb, 
+            &d_a[ofs + ofs*ldda], ldda,
+            d_d, d_info,
+            &d_a_cpy[ofs + ofs*ldda], ld_a_cpy);
 
         // Copy of L and U factors into buffers
         if (updm>in) {
@@ -228,17 +220,17 @@ void decompose_right_looking(
         }
         convert(stream, updm, in, &d_a[ofs+ofs *ldda], ldda, &d_a_cpy[ofs+ofs *ld_a_cpy], ld_a_cpy);
 
-                 //
-         // Perform trailing submatrix update w.r.t previous panel
-         // factorization
-         //
-         int64_t tm = m-ofst; // Width of trailing submatrix
-         int64_t tn = n-ofst; // Width of trailing submatrix
+        //
+        // Perform trailing submatrix update w.r.t previous panel
+        // factorization
+        //
+        int64_t tm = m-ofst; // Width of trailing submatrix
+        int64_t tn = n-ofst; // Width of trailing submatrix
 
-         float alpha = -1.0;
-         float beta = 1.0;
+        float alpha = -1.0;
+        float beta = 1.0;
 
-         if (tn>0) {
+        if (tn>0) {
             cublasStatus_t custat = cublasGemmEx(
                 queue, CUBLAS_OP_N, CUBLAS_OP_N,
                 tm, tn, nb,
@@ -251,18 +243,18 @@ void decompose_right_looking(
                 CUBLAS_ALGO);
                 //CUBLAS_GEMM_ALGO0_TENSOR_OP);
             cublas_check_error(custat);      
-         }
+        }
 
-      }
+    }
 
-            // Wait for completion
-      cuerr = cudaStreamSynchronize(stream);
-      checkCudaErrors(cuerr);
+    // Wait for completion
+    cuerr = cudaStreamSynchronize(stream);
+    checkCudaErrors(cuerr);
 
-      // Cleanup memory
-      // cublasDestroy(cuhandle);
-      cuerr = cudaFree(d_d);
-      checkCudaErrors(cuerr);
+    // Cleanup memory
+    // cublasDestroy(cuhandle);
+    cuerr = cudaFree(d_d);
+    checkCudaErrors(cuerr);
 }
 
 
@@ -274,7 +266,6 @@ void gen_random_matrix(int m, int n, T* a, int lda) {
 
     for(int j = 0; j < n; ++j)
         for(int i = 0; i < m; ++i) {
-            // a[j*lda+i] =  1.0;
             a[j * lda + i] =  distribution(generator);
         }
 }
@@ -332,10 +323,6 @@ int lu_test (
 
         b = new T[m];
 
-        //std::vector<T> x_zero(m, 0.0);
-
-        //remifa::tests::unsym_gen_rhs(m, &a[0], lda, &b[0], &x_zero[0]);
-
         std::memcpy(l, a, (std::size_t) lda * (std::size_t) m * sizeof(T));
 
         // Error managment
@@ -388,22 +375,11 @@ int lu_test (
         // Kick off device
         //
 
-        //
-        // W=T=fp32 and I=fp32 and O=TC32
-        // lu_nopiv_rl
-        //     <T, 8>
-        //     (cuhandle, m, m, nb, d_l, lda, d_inform, d_l_f16, lda);
-
         decompose_right_looking
             <T, // Working prec
-            //remifa::compute_type::FP32, // Inner update compute type
-            //remifa::compute_type::FP32, // Outer update compute type
             8 // Inner blocking
-            // 256, // outer block size
             >
             (cuhandle, m, m, opts->nb, d_l, lda, d_inform, d_l_f16, lda);
-        
-        //DO SOMETHING HERE
 
         // Wait for completion
         cuerr = cudaStreamSynchronize(stream);
@@ -413,7 +389,7 @@ int lu_test (
 
         // Get matrix into host memory      
         custat = cublasGetMatrix(m, m, sizeof(T), d_l, lda, l, lda);
-        // cudaMemcpy(l, d_l, lda*m*sizeof(T), cudaMemcpyDeviceToHost);
+        
         cublas_check_error(custat);
         // Get info
         cuerr = cudaMemcpy(&info, d_inform, sizeof(int), cudaMemcpyDeviceToHost);
@@ -428,16 +404,13 @@ int lu_test (
 
         cudaDeviceSynchronize();
 
-        long ttotal =  
-        std::chrono::duration_cast<std::chrono::nanoseconds>
+        long ttotal = std::chrono::duration_cast<std::chrono::nanoseconds>
         (end-start).count();
         double flops = ((double)2.0*m*m*m)/3.0;
         printf("factor time (s) = %e\n", 1e-9*ttotal);
         printf("GFlop/s = %.3f\n", flops/(double)ttotal);
 
-        //print_matrix(m, l, lda);
-
-           // Cleanup memory
+        // Cleanup memory
         if (nullptr != d_l) {
             cuerr = cudaFree(d_l);
             checkCudaErrors(cuerr);
